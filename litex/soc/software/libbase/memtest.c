@@ -13,7 +13,7 @@
 
 // Limits the number of errors printed, so that we can still access bios console
 #ifndef MEMTEST_DEBUG_MAX_ERRORS
-#define MEMTEST_DEBUG_MAX_ERRORS 400
+#define MEMTEST_DEBUG_MAX_ERRORS 20
 #endif
 // Retry reading when an error occurs. Allows to spot if errors happen during read or write.
 #ifndef MEMTEST_DATA_RETRIES
@@ -79,46 +79,53 @@ int memtest_bus(unsigned int *addr, unsigned long size)
 
 	errors = 0;
 
-	/* Write One/Zero pattern */
-	for(i=0; i<size/4; i++) {
-		array[i] = ONEZERO;
+	const unsigned int n_patterns = 35;
+	unsigned int patterns[35] =
+	{
+		ONEZERO,
+		ZEROONE,
+	};
+
+	for (int n = 0; n < 32; n++) {
+		patterns[n+2] = 1<<n;
 	}
+	patterns[34] = ONEZERO;
 
-	/* Flush caches */
-	flush_cpu_dcache();
-	flush_l2_cache();
+	for (int n = 0; n < n_patterns; n++) {
+		unsigned int pat = patterns[n];
+		errors = 0;
+		printf("memtest_bus pat 0x%08x\n", pat);
 
-	/* Read/Verify One/Zero pattern */
-	for(i=0; i<size/4; i++) {
-		rdata = array[i];
-		if(rdata != ONEZERO) {
-			errors++;
-#ifdef MEMTEST_BUS_DEBUG
-			if (MEMTEST_DEBUG_MAX_ERRORS < 0 || errors <= MEMTEST_DEBUG_MAX_ERRORS)
-				printf("memtest_bus error @ %p: 0x%08x vs 0x%08x\n", addr + i, rdata, ONEZERO);
-#endif
+		/* Clear */
+		for(i=0; i<size/4; i++) {
+			array[i] = 0;
 		}
-	}
 
-	/* Write Zero/One pattern */
-	for(i=0; i < size/4; i++) {
-		array[i] = ZEROONE;
-	}
+		/* Flush caches */
+		flush_cpu_dcache();
+		flush_l2_cache();
 
-	/* Flush caches */
-	flush_cpu_dcache();
-	flush_l2_cache();
-
-	/* Read/Verify One/Zero pattern */
-	for(i=0; i<size/4; i++) {
-		rdata = array[i];
-		if(rdata != ZEROONE) {
-			errors++;
-#ifdef MEMTEST_BUS_DEBUG
-			if (MEMTEST_DEBUG_MAX_ERRORS < 0 || errors <= MEMTEST_DEBUG_MAX_ERRORS)
-				printf("memtest_bus error @ %p:: 0x%08x vs 0x%08x\n", addr + i, rdata, ZEROONE);
-#endif
+		/* Write One/Zero pattern */
+		for(i=0; i<size/4; i++) {
+			array[i] = pat;
 		}
+
+		/* Flush caches */
+		flush_cpu_dcache();
+		flush_l2_cache();
+
+		/* Read/Verify One/Zero pattern */
+		for(i=0; i<size/4; i++) {
+			rdata = array[i];
+			if(rdata != pat) {
+				errors++;
+#ifdef MEMTEST_BUS_DEBUG
+				if (MEMTEST_DEBUG_MAX_ERRORS < 0 || errors <= MEMTEST_DEBUG_MAX_ERRORS)
+					printf("memtest_bus error @ %p: 0x%08x vs 0x%08x\n", addr + i, rdata, ONEZERO);
+#endif
+			}
+		}
+		printf("0x%08x  %d errors\n", pat, errors);
 	}
 
 	return errors;
