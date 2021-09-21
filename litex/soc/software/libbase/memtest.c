@@ -28,7 +28,7 @@
 #define ZEROONE 0x55555555
 
 #ifndef MEMTEST_BUS_SIZE
-#define MEMTEST_BUS_SIZE (512)
+#define MEMTEST_BUS_SIZE (2048)
 #endif
 
 #define MEMTEST_DATA_RANDOM 1
@@ -74,7 +74,7 @@ int memtest_access(unsigned int *addr)
 int memtest_bus(unsigned int *addr, unsigned long size)
 {
 	volatile unsigned int *array = addr;
-	int i, errors;
+	int i, errors, start = 0;
 	unsigned int rdata;
 
 	errors = 0;
@@ -91,10 +91,15 @@ int memtest_bus(unsigned int *addr, unsigned long size)
 	}
 	patterns[34] = ONEZERO;
 
+#ifdef HAVE_REALRANDOM
+	start = realrandom() % n_patterns;
+#endif
+
 	for (int n = 0; n < n_patterns; n++) {
-		unsigned int pat = patterns[n];
+		int idx = (n+start) % n_patterns;
+		unsigned int pat = patterns[idx];
 		errors = 0;
-		printf("memtest_bus pat 0x%08x\n", pat);
+		printf("memtest_bus run #%d idx %d at 0x%08x\n", n, idx, pat);
 
 		/* Clear */
 		for(i=0; i<size/4; i++) {
