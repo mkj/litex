@@ -79,27 +79,29 @@ int memtest_bus(unsigned int *addr, unsigned long size)
 
 	errors = 0;
 
-	const unsigned int n_patterns = 35;
-	unsigned int patterns[35] =
-	{
-		ONEZERO,
-		ZEROONE,
-	};
-
+	const unsigned int n_patterns = 4;
+	unsigned int patterns[4];
+	patterns[0] = realrandom();
+	patterns[1] = realrandom();
+	patterns[2] = realrandom();
+	patterns[3] = realrandom();
+	/*
+	patterns[2] = ONEZERO;
+	patterns[3] = ZEROONE;
 	for (int n = 0; n < 32; n++) {
-		patterns[n+2] = 1<<n;
+		patterns[n+4] = 1<<n;
 	}
-	patterns[34] = ONEZERO;
+	patterns[36] = ONEZERO;
+	*/
 
-#ifdef HAVE_REALRANDOM
-	start = realrandom() % n_patterns;
-#endif
+	// start = realrandom() % n_patterns;
+	start = 1;
 
-	for (int n = 0; n < n_patterns; n++) {
+	for (int n = 0, idx0 = 0; n < n_patterns; n++) {
 		int idx = (n+start) % n_patterns;
 		unsigned int pat = patterns[idx];
 		errors = 0;
-		printf("memtest_bus run #%d idx %d at 0x%08x\n", n, idx, pat);
+		printf("memtest_bus run #%d idx %d pat 0x%08x start 0x%08x\n", n, idx, pat, idx0);
 
 		/* Clear */
 		for(i=0; i<size/4; i++) {
@@ -112,7 +114,7 @@ int memtest_bus(unsigned int *addr, unsigned long size)
 
 		/* Write One/Zero pattern */
 		for(i=0; i<size/4; i++) {
-			array[i] = pat;
+			array[i+idx0] = pat;
 		}
 
 		/* Flush caches */
@@ -121,15 +123,16 @@ int memtest_bus(unsigned int *addr, unsigned long size)
 
 		/* Read/Verify One/Zero pattern */
 		for(i=0; i<size/4; i++) {
-			rdata = array[i];
+			rdata = array[i + idx0];
 			if(rdata != pat) {
 				errors++;
 #ifdef MEMTEST_BUS_DEBUG
 				if (MEMTEST_DEBUG_MAX_ERRORS < 0 || errors <= MEMTEST_DEBUG_MAX_ERRORS)
-					printf("memtest_bus error @ %p: 0x%08x vs 0x%08x\n", addr + i, rdata, ONEZERO);
+					printf("memtest_bus error @ %p: 0x%08x vs 0x%08x\n", addr + i + idx0, rdata, pat);
 #endif
 			}
 		}
+		idx0 += i;
 		printf("0x%08x  %d errors\n", pat, errors);
 	}
 
@@ -328,6 +331,7 @@ int memtest(unsigned int *addr, unsigned long maxsize)
 	unsigned long bus_size  = MEMTEST_BUS_SIZE < maxsize ? MEMTEST_BUS_SIZE : maxsize;
 	unsigned long addr_size = MEMTEST_ADDR_SIZE < maxsize ? MEMTEST_ADDR_SIZE : maxsize;
 	unsigned long data_size = maxsize;
+	int rc;
 
 	printf("Memtest at %p (", addr);
 	print_size(data_size);
@@ -338,17 +342,22 @@ int memtest(unsigned int *addr, unsigned long maxsize)
 		return 0;
 #endif
 
-	bus_errors  = memtest_bus(addr, bus_size);
-	addr_errors = memtest_addr(addr, addr_size, MEMTEST_ADDR_RANDOM);
-	data_errors = memtest_data(addr, data_size, MEMTEST_DATA_RANDOM, NULL);
+	rc = 1;
+	for (int i = 0; i < 2; i++) {
 
-	if(bus_errors + addr_errors + data_errors != 0) {
-		printf("  bus errors:  %d/%ld\n", bus_errors,  2*bus_size/4);
-		printf("  addr errors: %d/%ld\n", addr_errors, addr_size/4);
-		printf("  data errors: %d/%ld\n", data_errors, data_size/4);
-		printf("Memtest KO\n");
-		return 0;
+		addr_errors = memtest_addr(addr, addr_size, MEMTEST_ADDR_RANDOM);
+		bus_errors  = memtest_bus(addr, bus_size);
+		data_errors = memtest_data(addr, data_size, MEMTEST_DATA_RANDOM, NULL);
+
+		if(bus_errors + addr_errors + data_errors != 0) {
+			printf("  bus errors:  %d/%ld\n", bus_errors,  2*bus_size/4);
+			printf("  addr errors: %d/%ld\n", addr_errors, addr_size/4);
+			printf("  data errors: %d/%ld\n", data_errors, data_size/4);
+			printf("Memtest KO\n");
+			rc = 0;
+		} else {
+			printf("Memtest OK\n");
+		}
 	}
-	printf("Memtest OK\n");
-	return 1;
+	return rc;
 }
