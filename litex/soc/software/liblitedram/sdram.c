@@ -1248,6 +1248,10 @@ int sdram_init(void)
 	ddrctrl_init_error_write(0);
 #endif
 	init_sequence();
+#ifdef CSR_DDRCTRL_BASE
+	// XXX matt set init flag before memtest
+	ddrctrl_init_done_write(1);
+#endif
 #if defined(SDRAM_PHY_WRITE_LEVELING_CAPABLE) || defined(SDRAM_PHY_READ_LEVELING_CAPABLE)
 	sdram_leveling();
 #endif
@@ -1255,7 +1259,8 @@ int sdram_init(void)
 #ifndef SDRAM_TEST_DISABLE
 	if(!memtest((unsigned int *) MAIN_RAM_BASE, MEMTEST_DATA_SIZE)) {
 #ifdef CSR_DDRCTRL_BASE
-		ddrctrl_init_error_write(1);
+		// XXX matt disable error flag for now
+		// ddrctrl_init_error_write(1);
 		ddrctrl_init_done_write(1);
 #endif
 		return 0;
